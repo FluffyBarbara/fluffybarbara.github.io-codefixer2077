@@ -8,7 +8,7 @@
 ## Демонстрация
 
 Запустите игру прямо в браузере по ссылке:  
-[https://fluffybarbara.github.io/codefixer2077](https://fluffybarbara.github.io/codefixer2077)
+[https://fluffybarbara.github.io/codefixer2077](https://fluffybarbara.github.io/fluffybarbara.github.io-codefixer2077/)
 
 ---
 
