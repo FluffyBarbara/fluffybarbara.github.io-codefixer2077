@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Симулятор Хакера 2077 — Подсказки для новичков</title>
+<style>
+  html, body {
+    margin: 0; padding: 0;
+    height: 100%;
+    background: #000;
+    color: #0f0;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 18px;
+    user-select: text;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  #terminal {
+    padding: 20px;
+    box-sizing: border-box;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    max-width: 100vw;
+    height: 100vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-top: 50px;
+  }
+  .cursor {
+    display: inline-block;
+    width: 10px;
+    background: #0f0;
+    animation: blink 1s infinite step-start;
+    margin-left: 2px;
+  }
+  @keyframes blink {
+    50% { background: transparent; }
+  }
+  input {
+    background: transparent;
+    border: none;
+    color: #0f0;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 18px;
+    outline: none;
+    caret-color: #0f0;
+    width: 90%;
+    max-width: 600px;
+  }
+  textarea {
+    background: transparent;
+    border: none;
+    color: #0f0;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 18px;
+    outline: none;
+    caret-color: #0f0;
+    width: 90%;
+    max-width: 600px;
+    resize: vertical;
+  }
+  .input-line {
+    white-space: nowrap;
+    margin-bottom: 10px;
+  }
+  .code-block {
+    background: #022;
+    padding: 10px;
+    margin: 10px 0;
+    border-left: 4px solid #0f0;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-family: 'Courier New', monospace;
+    user-select: text;
+    cursor: text;
+    max-width: 100%;
+  }
+  .mode-button {
+    display: inline-block;
+    margin: 10px 15px 20px 0;
+    padding: 10px 20px;
+    border: 2px solid #0f0;
+    color: #0f0;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.3s, color 0.3s;
+  }
+  .mode-button:hover {
+    background-color: #0f0;
+    color: #000;
+  }
+  .lesson {
+    background: #004400;
+    border: 2px solid #0f0;
+    padding: 15px;
+    margin: 15px 0;
+    max-width: 90vw;
+    white-space: normal;
+  }
+  #settings-btn {
+    position: fixed;
+    top: 8px;
+    right: 8px;
+    font-size: 28px;
+    color: #0f0;
+    cursor: pointer;
+    user-select: none;
+    z-index: 1000;
+  }
+  #settings-panel {
+    position: fixed;
+    top: 40px;
+    right: 8px;
+    background: #001100;
+    border: 2px solid #0f0;
+    padding: 15px;
+    max-width: 250px;
+    display: none;
+    z-index: 1000;
+    font-size: 16px;
+  }
+  #settings-panel label {
+    display: block;
+    margin-bottom: 10px;
+    cursor: pointer;
+  }
+  #settings-panel input[type="radio"] {
+    margin-right: 6px;
+  }
+</style>
+</head>
+<body>
+
+<div id="settings-btn" title="Настройки">⚙️</div>
+<div id="settings-panel">
+  <strong>Режим работы:</strong>
+  <label><input type="radio" name="mode" value="newbie" /> Новичок</label>
+  <label><input type="radio" name="mode" value="pro" /> Профессионал</label>
+</div>
+
+<div id="terminal"></div>
+
+<script>
+  const terminal = document.getElementById('terminal');
+  const settingsBtn = document.getElementById('settings-btn');
+  const settingsPanel = document.getElementById('settings-panel');
+
+  settingsBtn.onclick = () => {
+    settingsPanel.style.display = (settingsPanel.style.display === 'block') ? 'none' : 'block';
+  };
+
+  let session = {
+    user: null,
+    mode: null,
+    taskIndices: null,
+    currentTask: 0
+  };
+
+  function saveSession() {
+    localStorage.setItem('hacker_sim_session', JSON.stringify(session));
+  }
+
+  function loadSession() {
+    const raw = localStorage.getItem('hacker_sim_session');
+    if(raw) {
+      try {
+        session = JSON.parse(raw);
+      } catch {
+        session = {user: null, mode: null, taskIndices: null, currentTask: 0};
+      }
+    }
+  }
+
+  async function typeText(text, delay=30) {
+    for(let char of text) {
+      terminal.innerHTML += char;
+      terminal.scrollTop = terminal.scrollHeight;
+      await sleep(delay);
+    }
+  }
+
+  function sleep(ms) {
+    return new Promise(r => setTimeout(r, ms));
+  }
+
+  function createInputLine(promptText, passwordType = false) {
+    const line = document.createElement('div');
+    line.className = 'input-line';
+
+    const promptSpan = document.createElement('span');
+    promptSpan.textContent = promptText;
+    line.appendChild(promptSpan);
+
+    const input = document.createElement('input');
+    input.type = passwordType ? 'password' : 'text';
+    input.autocomplete = 'off';
+    input.spellcheck = false;
+    line.appendChild(input);
+
+    terminal.appendChild(line);
+    input.focus();
+
+    return input;
+  }
+
+  function createInputArea(promptText) {
+    const line = document.createElement('div');
+    line.className = 'input-line';
+
+    const promptSpan = document.createElement('span');
+    promptSpan.textContent = promptText;
+    line.appendChild(promptSpan);
+
+    const textarea = document.createElement('textarea');
+    textarea.rows = 6;
+    textarea.style.background = 'transparent';
+    textarea.style.border = 'none';
+    textarea.style.color = '#0f0';
+    textarea.style.fontFamily = "'Courier New', Courier, monospace";
+    textarea.style.fontSize = '18px';
+    textarea.style.outline = 'none';
+    textarea.style.caretColor = '#0f0';
+    textarea.style.width = '90%';
+    textarea.style.maxWidth = '600px';
+    textarea.style.resize = 'vertical';
+    textarea.spellcheck = false;
+    textarea.autocomplete = 'off';
+
+    line.appendChild(textarea);
+    terminal.appendChild(line);
+    textarea.focus();
+
+    return textarea;
+  }
+
+  async function registerUser() {
+    await typeText("=== Регистрация нового пользователя ===\n");
+    const usernameInput = createInputLine("Введите имя пользователя: ");
+    const username = await new Promise(resolve => {
+      usernameInput.addEventListener('keydown', e => {
+        if(e.key === 'Enter' && usernameInput.value.trim() !== '') {
+          resolve(usernameInput.value.trim());
+        }
+      });
+    });
+    usernameInput.parentNode.textContent = "Имя пользователя: " + username + "\n";
+
+    const passwordInput = createInputLine("Введите пароль: ", true);
+    const password = await new Promise(resolve => {
+      passwordInput.addEventListener('keydown', e => {
+        if(e.key === 'Enter' && passwordInput.value.trim() !== '') {
+          resolve(passwordInput.value);
+        }
+      });
+    });
+    passwordInput.parentNode.textContent = "Пароль: " + "*".repeat(password.length) + "\n";
+
+    session.user = {username, password};
+    saveSession();
+
+    await typeText("Регистрация успешна!\n\n");
+    return session.user;
+  }
+
+  // Большой набор заданий с ошибками в CSS, HTML, JS и т.п.
+  const tasksPool = [
+  {
+    description: "Проанализируйте следующий CSS и найдите ошибку в свойстве фонового цвета:\n\n",
+    code: `body {
+  background-colour: #222222;
+  color: #ffffff;
+  font-family: Arial, sans-serif;
+}`,
+    hint: "Правильное свойство — 'background-color', а не 'background-colour'.",
+    correctAnswer: `body {
+  background-color: #222222;
+  color: #ffffff;
+  font-family: Arial, sans-serif;
+}`
+  },
+  {
+    description: "Проанализируйте следующий CSS и найдите ошибку в свойстве веса шрифта:\n\n",
+    code: `h1 {
+  font-weight: boldd;
+  color: #0f0;
+}`,
+    hint: "Правильное значение свойства 'font-weight' — 'bold', а не 'boldd'.",
+    correctAnswer: `h1 {
+  font-weight: bold;
+  color: #0f0;
+}`
+  },
+  {
+    description: "Найдите ошибку в HTML-разметке изображения:\n\n",
+    code: `<img src="image.png" alt="картинка" / >`,
+    hint: "В HTML пробел перед закрывающим слэшем в теге <img> не нужен, лучше просто <img src=\"image.png\" alt=\"картинка\">.",
+    correctAnswer: `<img src="image.png" alt="картинка">`
+  },
+  {
+    description: "Найдите ошибку в JavaScript коде:\n\n",
+    code: `const num = 5;\nif(num = 5) {\n  console.log("Пять");\n}`,
+    hint: "В условии нужно сравнение '==', а не присваивание '='.",
+    correctAnswer: `const num = 5;\nif(num == 5) {\n  console.log("Пять");\n}`
+  },
+  {
+    description: "В CSS задано:\n\n",
+    code: `.box {\n  width: 100px;\n  height: 100px;\n  background-color: #f00;\n  position: absolut;\n}`,
+    hint: "В значении свойства 'position' опечатка, должно быть 'absolute', а не 'absolut'.",
+    correctAnswer: `.box {\n  width: 100px;\n  height: 100px;\n  background-color: #f00;\n  position: absolute;\n}`
+  },
+  {
+    description: "Найдите ошибку в HTML:\n\n",
+    code: `<a href="http://example.com" target="_blank" noreferrer>Ссылка</a>`,
+    hint: "Для безопасности в новом окне добавляют rel=\"noreferrer\" (с атрибутом rel), а не просто noreferrer.",
+    correctAnswer: `<a href="http://example.com" target="_blank" rel="noreferrer">Ссылка</a>`
+  },
+  {
+    description: "Найдите ошибку в CSS:\n\n",
+    code: `p {\n  font-size: 16px;\n  colr: #000000;\n}`,
+    hint: "Опечатка в свойстве 'color', написано 'colr'.",
+    correctAnswer: `p {\n  font-size: 16px;\n  color: #000000;\n}`
+  },
+  {
+    description: "Найдите ошибку в JavaScript:\n\n",
+    code: `function greet() {\n  console.log("Привет!");\n}\ngreet;`,
+    hint: "Чтобы вызвать функцию, нужно добавить круглые скобки: greet();",
+    correctAnswer: `function greet() {\n  console.log("Привет!");\n}\ngreet();`
+  },
+  {
+    description: "Найдите ошибку в HTML:\n\n",
+    code: `<input type="text" placeholder="Введите имя" require>`,
+    hint: "Атрибут должен быть 'required', а не 'require'.",
+    correctAnswer: `<input type="text" placeholder="Введите имя" required>`
+  },
+  {
+    description: "Найдите ошибку в CSS:\n\n",
+    code: `.container {\n  dispaly: flex;\n  justify-content: center;\n}`,
+    hint: "Опечатка в свойстве 'display', написано 'dispaly'.",
+    correctAnswer: `.container {\n  display: flex;\n  justify-content: center;\n}`
+  },
+  {
+    description: "Найдите ошибку в JS:\n\n",
+    code: `let x = 10;\nif(x > 5)\n  console.log('Больше 5');\n else\n  console.log('Меньше или равно 5');`,
+    hint: "Проблема с отступами — else должен быть на том же уровне, что и if, или if нужно заключать в фигурные скобки.",
+    correctAnswer: `let x = 10;\nif(x > 5) {\n  console.log('Больше 5');\n} else {\n  console.log('Меньше или равно 5');\n}`
+  },
+  {
+    description: "Найдите ошибку в CSS:\n\n",
+    code: `h2 {\n  text-align: center;\n  font-size: 20pt;\n}`,
+    hint: "Единицы 'pt' редко используются в вебе, обычно для шрифта применяют 'px' или 'rem'.",
+    correctAnswer: `h2 {\n  text-align: center;\n  font-size: 20px;\n}`
+  },
+  {
+    description: "Найдите ошибку в HTML:\n\n",
+    code: `<div><p>Текст</div></p>`,
+    hint: "Нельзя закрывать теги в неправильном порядке. Правильно: <div><p>Текст</p></div>.",
+    correctAnswer: `<div><p>Текст</p></div>`
+  },
+  {
+    description: "Найдите ошибку в JS:\n\n",
+    code: `const arr = [1, 2, 3];\nconsole.log(arr.lenght);`,
+    hint: "Опечатка в свойстве 'length'.",
+    correctAnswer: `const arr = [1, 2, 3];\nconsole.log(arr.length);`
+  },
+  {
+    description: "Найдите ошибку в CSS:\n\n",
+    code: `.header {\n  background-color: #000000;\n  height 50px;\n}`,
+    hint: "Пропущен двоеточие после 'height'.",
+    correctAnswer: `.header {\n  background-color: #000000;\n  height: 50px;\n}`
+  },
+  {
+    description: "Найдите ошибку в HTML:\n\n",
+    code: `<input type="checkbox" checked="false">`,
+    hint: "Атрибут checked — булевый. Чтобы снять галочку, его нужно вообще убрать, или не ставить checked.",
+    correctAnswer: `<input type="checkbox">`
+  },
+  {
+    description: "Найдите ошибку в JS:\n\n",
+    code: `for(let i = 0; i < 5; i--) {\n  console.log(i);\n}`,
+    hint: "В цикле счетчик уменьшается i--, но условие i < 5 — всегда истинно при уменьшении. Нужно i++.",
+    correctAnswer: `for(let i = 0; i < 5; i++) {\n  console.log(i);\n}`
+  },
+  {
+    description: "Найдите ошибку в CSS:\n\n",
+    code: `.footer {\n  padding: 20px\n  background-color: #111;\n}`,
+    hint: "Пропущена точка с запятой после 'padding: 20px'.",
+    correctAnswer: `.footer {\n  padding: 20px;\n  background-color: #111;\n}`
+  },
+  // Новые задания с ошибками вместо удаленных "без ошибок"
+  {
+    description: "Найдите ошибку в HTML кнопке:\n\n",
+    code: `<button onclick='alert("Привет)>Нажми меня</button>`,
+    hint: "Внутри атрибута onclick пропущена закрывающая кавычка для строки 'Привет'. Нужно 'alert(\"Привет\")'.",
+    correctAnswer: `<button onclick='alert("Привет")'>Нажми меня</button>`
+  },
+  {
+    description: "Найдите ошибку в JavaScript:\n\n",
+    code: `const person = {name: 'Иван', age: 30\nconsole.log(person['age']);`,
+    hint: "В объекте отсутствует закрывающая фигурная скобка '}'.",
+    correctAnswer: `const person = {name: 'Иван', age: 30};\nconsole.log(person['age']);`
+  }
+];
+
+
+  function getRandomTasks(count) {
+    const shuffled = [...tasksPool].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, count);
+  }
+
+  async function runTask(task, isNewbie) {
+    await typeText("\n" + task.description);
+    const codeBlock = document.createElement('pre');
+    codeBlock.className = 'code-block';
+    codeBlock.textContent = task.code;
+    terminal.appendChild(codeBlock);
+
+    let attempts = isNewbie ? 3 : 1;
+    for(let attempt = 1; attempt <= attempts; attempt++) {
+      const answerInput = createInputArea("Ваш ответ: ");
+      const answer = await new Promise(resolve => {
+        answerInput.addEventListener('keydown', e => {
+          if(e.key === 'Enter' && (e.shiftKey || e.ctrlKey)) {
+            // Shift+Enter или Ctrl+Enter — отправить многострочный ответ
+            e.preventDefault();
+            resolve(answerInput.value.trim());
+          } else if(e.key === 'Enter') {
+            e.preventDefault();
+            resolve(answerInput.value.trim());
+          }
+        });
+      });
+      answerInput.parentNode.textContent = `Ваш ответ:\n${answer}\n`;
+
+      if(answer === task.correctAnswer) {
+        await typeText("Верно! Задание выполнено.\n");
+        return true;
+      } else {
+        if(attempt < attempts) {
+          await typeText(`Неверно. Попробуйте ещё раз. Подсказка: ${task.hint}\n`);
+        } else {
+          await typeText("\nВы исчерпали попытки. Вот правильный ответ:\n\n");
+          const correctBlock = document.createElement('pre');
+          correctBlock.className = 'code-block';
+          correctBlock.textContent = task.correctAnswer;
+          terminal.appendChild(correctBlock);
+          await typeText("\nПереходим к следующему заданию...\n\n");
+          return false;
+        }
+      }
+    }
+  }
+
+  async function chooseMode() {
+    await typeText("Выберите режим работы:\n1. Новичок\n2. Профессионал\n");
+    const modeInput = createInputLine("Введите номер режима: ");
+
+    const mode = await new Promise(resolve => {
+      modeInput.addEventListener('keydown', e => {
+        if(e.key === 'Enter') {
+          const val = modeInput.value.trim();
+          if(val === '1' || val.toLowerCase() === 'новичок' || val.toLowerCase() === 'newbie') {
+            resolve('newbie');
+          } else if(val === '2' || val.toLowerCase() === 'профессионал' || val.toLowerCase() === 'pro') {
+            resolve('pro');
+          }
+        }
+      });
+    });
+    modeInput.parentNode.textContent = `Вы выбрали режим: ${mode === 'newbie' ? 'Новичок' : 'Профессионал'}\n\n`;
+    return mode;
+  }
+
+  async function start() {
+  loadSession();
+
+  if(!session.user) {
+    await registerUser();
+  } else {
+    await typeText(`Добро пожаловать обратно, ${session.user.username}!\n\n`);
+  }
+
+  if(!session.mode) {
+    session.mode = await chooseMode();
+    saveSession();
+  } else {
+    await typeText(`Вы выбрали режим: ${session.mode === 'newbie' ? 'Новичок' : 'Профессионал'}\n\n`);
+  }
+
+  // Обновляем радиокнопки в настройках
+  [...settingsPanel.querySelectorAll('input[name="mode"]')].forEach(radio => {
+    radio.checked = (radio.value === session.mode);
+    radio.onclick = () => {
+      session.mode = radio.value;
+      saveSession();
+      location.reload();
+    };
+  });
+
+  let consecutiveSuccess = 0;
+
+  while(true) {
+    // Если нет текущих заданий или дошли до конца, выбираем новую пачку
+    if(!session.taskIndices || session.currentTask >= session.taskIndices.length) {
+      const count = Math.floor(Math.random() * 6) + 10; // 10..15
+      const selected = getRandomTasks(count);
+      session.taskIndices = selected.map(t => tasksPool.indexOf(t));
+      session.currentTask = 0;
+      saveSession();
+      await typeText("\nСгенерированы новые задания. Приступаем...\n\n");
+    }
+
+    const task = tasksPool[session.taskIndices[session.currentTask]];
+    const success = await runTask(task, session.mode === 'newbie');
+
+    if(success) {
+      consecutiveSuccess++;
+      await typeText(`Успешно подряд: ${consecutiveSuccess}\n`);
+    } else {
+      consecutiveSuccess = 0;
+    }
+
+    session.currentTask++;
+    saveSession();
+
+    // Если успешно 2 задания подряд, сбрасываем прогресс по заданиям и генерируем новые
+    if(consecutiveSuccess >= 2) {
+      consecutiveSuccess = 0;
+      session.taskIndices = null;
+      session.currentTask = 0;
+      saveSession();
+      await typeText("\nПоздравляем! Вы успешно выполнили 2 задания подряд. Загружаем новую порцию заданий...\n\n");
+    }
+  }
+}
+
+  start();
+</script>
+
+</body>
+</html>
